@@ -48,12 +48,12 @@ public class MainActivity extends ActionBarActivity {
             @Override
             public void onClick(View v) {
                 // makes sure each value is filled in the edit texts
-                boolean isPositiveNumber = interval.getText().toString().matches("^[1-9]+[0-9]*$");
-                boolean messageHasValue = !message.getText().toString().equals("");
-                boolean numberHasValue = !phoneNumber.getText().toString().equals("");
+                boolean validNumber = interval.getText().toString().matches("^[1-9]+[0-9]*$");
+                boolean messageValue = !message.getText().toString().equals("");
+                boolean numberValue = !phoneNumber.getText().toString().equals("");
                 Log.i("onClick()", message.getText().toString() + ": " + phoneNumber.getText().toString());
 
-                registerReceiver(alarmReceiver, new IntentFilter("SoundDaAlarm"));
+                registerReceiver(alarmReceiver, new IntentFilter("receiveFeedBack"));
                 AlarmManager am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
 
                 if (started) {
@@ -64,7 +64,7 @@ public class MainActivity extends ActionBarActivity {
                     am.cancel(alarmIntent);
                     alarmIntent.cancel();
 
-                } else if (isPositiveNumber && messageHasValue && numberHasValue) {
+                } else if (validNumber && messageValue && numberValue) {
                     start.setText("Stop");
                     start.setBackgroundColor(Color.parseColor("#e74c3c"));
                     started = true;
@@ -73,7 +73,7 @@ public class MainActivity extends ActionBarActivity {
                     Intent i = new Intent();
                     i.putExtra("number", phoneNumber.getText().toString());
                     i.putExtra("message", message.getText().toString());
-                    i.setAction("SoundDaAlarm");
+                    i.setAction("receiveFeedBack");
 
                     alarmIntent = PendingIntent.getBroadcast(MainActivity.this, 0, i, 0);
                     am.setRepeating(AlarmManager.RTC, System.currentTimeMillis() + milliSeconds, milliSeconds, alarmIntent);
