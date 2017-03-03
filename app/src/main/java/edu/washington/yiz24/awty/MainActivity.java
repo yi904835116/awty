@@ -7,101 +7,114 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.graphics.Color;
-import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
+import android.telephony.PhoneNumberFormattingTextWatcher;
+import android.telephony.PhoneNumberUtils;
+import android.telephony.SmsManager;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
 
-
-public class MainActivity extends ActionBarActivity {
-    private boolean started;
-
-    PendingIntent alarmIntent = null;
-    BroadcastReceiver alarmReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(final Context context, Intent intent) {
-            String message = intent.getStringExtra("message");
-            String number = intent.getStringExtra("number");
-            Toast.makeText(MainActivity.this, number + ": " + message, Toast.LENGTH_SHORT).show();
-        }
-    };
+public class MainActivity extends Activity {
+    private boolean startPressed; //determines whether alarm is currently on or off
+    private AlarmManager am;
+    private PendingIntent alarmIntent;
+    private int interval; //milliseconds between messages
+    private String message; //message user would like to send
+    private String phoneNumber;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Log.i("MainActivity", "onCreate fired");
         setContentView(R.layout.activity_main);
+        startPressed = false;
+        interval = -1;
+
+        //auto-formats phone number for the user as they type
+        EditText phone = (EditText) findViewById(R.id.phoneNumber);
+        phone.addTextChangedListener(new PhoneNumberFormattingTextWatcher());
+
+        am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+        BroadcastReceiver alarmReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                try {
+                    phoneNumber = phoneToDialable(phoneNumber);
+                    SmsManager smsManager = SmsManager.getDefault();
+                    Log.i("MainActivity", phoneNumber);
+                    smsManager.sendTextMessage(phoneNumber, null, message, null, null);
+                    Toast.makeText(getApplicationContext(), "SMS Sent!",
+                            Toast.LENGTH_LONG).show();
+                } catch (Exception e) {
+                    Toast.makeText(getApplicationContext(),
+                            "Message could not send, please try again later!" + e.toString(),
+                            Toast.LENGTH_LONG).show();
+                    e.printStackTrace();
+                }
+            }
+        };
+
+        //registers BroadcastReceiver and adds filter so only alarm intent is received
+        registerReceiver(alarmReceiver, new IntentFilter("SoundDaAlarm"));
+
+        Intent i = new Intent();
+        i.setAction("SoundDaAlarm"); //sets type of intent (alarm intent)
+        alarmIntent = PendingIntent.getBroadcast(this, 0, i, 0);
 
         final Button start = (Button) findViewById(R.id.start);
-        final EditText message = (EditText) findViewById(R.id.message);
-        final EditText phoneNumber = (EditText) findViewById(R.id.phoneNumber);
-        final EditText interval = (EditText) findViewById(R.id.interval);
-
-        final Activity currentActivity = this;
-
         start.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                // makes sure each value is filled in the edit texts
-                boolean validNumber = interval.getText().toString().matches("^[1-9]+[0-9]*$");
-                boolean messageValue = !message.getText().toString().equals("");
-                boolean numberValue = !phoneNumber.getText().toString().equals("");
-                Log.i("onClick()", message.getText().toString() + ": " + phoneNumber.getText().toString());
-
-                registerReceiver(alarmReceiver, new IntentFilter("receiveFeedBack"));
-                AlarmManager am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
-
-                if (started) {
-                    started = false;
+                if (!startPressed) {
+                    getUserInput();
+                    if (message != null && phoneNumber != null && interval > 0) {
+                        am.setRepeating(AlarmManager.RTC, System.currentTimeMillis() - interval,
+                                interval, alarmIntent);
+                        start.setText("Stop");
+                        startPressed = !startPressed;
+                    }
+                } else {
                     start.setText("Start");
-                    start.setBackgroundColor(Color.rgb(0, 153, 0));
-
+                    startPressed = !startPressed;
                     am.cancel(alarmIntent);
-                    alarmIntent.cancel();
-
-                } else if (validNumber && messageValue && numberValue) {
-                    start.setText("Stop");
-                    start.setBackgroundColor(Color.parseColor("#e74c3c"));
-                    started = true;
-                    int milliSeconds = Integer.parseInt(interval.getText().toString()) * 1000 * 60;
-
-                    Intent i = new Intent();
-                    i.putExtra("number", phoneNumber.getText().toString());
-                    i.putExtra("message", message.getText().toString());
-                    i.setAction("receiveFeedBack");
-
-                    alarmIntent = PendingIntent.getBroadcast(MainActivity.this, 0, i, 0);
-                    am.setRepeating(AlarmManager.RTC, System.currentTimeMillis() + milliSeconds, milliSeconds, alarmIntent);
                 }
             }
         });
     }
 
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.main_menu, menu);
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
-        int id = item.getItemId();
-
-        //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
-            return true;
+    public String phoneToDialable(String phone) {
+        String dialablePhone = "";
+        for (int i = 0; i < phone.length(); i++) {
+            if (PhoneNumberUtils.is12Key(phone.charAt(i))) {
+                dialablePhone += phone.charAt(i);
+            }
         }
-
-        return super.onOptionsItemSelected(item);
+        return dialablePhone;
     }
+
+    private void getUserInput() {
+        EditText message = (EditText) findViewById(R.id.message);
+        EditText phoneNumber = (EditText) findViewById(R.id.phoneNumber);
+        EditText minutes = (EditText) findViewById(R.id.interval);
+
+        this.message = message.getText().toString();
+        this.phoneNumber = phoneNumber.getText().toString();
+        try {
+            this.interval = Integer.parseInt(minutes.getText().toString()) * 60000;
+        } catch (NumberFormatException e) {
+            this.interval = -1;
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        Log.i("MainActivity", "onDestroy Fired");
+        am.cancel(alarmIntent);
+        alarmIntent.cancel();
+    }
+
 }
