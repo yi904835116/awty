@@ -58,10 +58,10 @@ public class MainActivity extends Activity {
         };
 
         //registers BroadcastReceiver and adds filter so only alarm intent is received
-        registerReceiver(alarmReceiver, new IntentFilter("SoundDaAlarm"));
+        registerReceiver(alarmReceiver, new IntentFilter("alarming"));
 
         Intent i = new Intent();
-        i.setAction("SoundDaAlarm"); //sets type of intent (alarm intent)
+        i.setAction("alarming"); //sets type of intent (alarm intent)
         alarmIntent = PendingIntent.getBroadcast(this, 0, i, 0);
 
         final Button start = (Button) findViewById(R.id.start);
